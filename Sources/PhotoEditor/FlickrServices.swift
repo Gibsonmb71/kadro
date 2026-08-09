@@ -672,7 +672,7 @@ final class FlickrAPIService: NSObject, ObservableObject, FlickrService {
                     "page": String(page),
                     "per_page": "500",
                     "media": "photos",
-                    "extras": "url_l,url_k,url_h,url_m,url_t,last_update"
+                    "extras": "original_format,url_o,url_k,url_h,url_l,url_m,url_t,last_update"
                 ]
             )
             guard let photoset = root["photoset"] as? [String: Any],
@@ -692,7 +692,7 @@ final class FlickrAPIService: NSObject, ObservableObject, FlickrService {
             method: "flickr.photos.getInfo",
             parameters: [
                 "photo_id": photoID,
-                "extras": "url_l,url_k,url_h,url_m,url_t"
+                "extras": "original_format,url_o,url_k,url_h,url_l,url_m,url_t"
             ]
         )
         guard let photo = root["photo"] as? [String: Any],
@@ -818,7 +818,8 @@ final class FlickrAPIService: NSObject, ObservableObject, FlickrService {
             return nil
         }
 
-        let displayURL = url(value, "url_k")
+        let displayURL = url(value, "url_o")
+            ?? url(value, "url_k")
             ?? url(value, "url_h")
             ?? url(value, "url_l")
             ?? url(value, "url_m")
@@ -871,13 +872,14 @@ final class FlickrAPIService: NSObject, ObservableObject, FlickrService {
 
     private func urlRank(_ label: String?) -> Int {
         let normalized = label?.lowercased() ?? ""
-        if normalized.contains("large 2048") { return 0 }
-        if normalized == "large" || normalized.contains("large 1600") { return 1 }
-        if normalized.contains("medium 800") { return 2 }
-        if normalized.contains("medium 640") { return 3 }
-        if normalized == "medium" { return 4 }
-        if normalized.contains("small") { return 5 }
-        return 6
+        if normalized == "original" { return 0 }
+        if normalized.contains("large 2048") { return 1 }
+        if normalized == "large" || normalized.contains("large 1600") { return 2 }
+        if normalized.contains("medium 800") { return 3 }
+        if normalized.contains("medium 640") { return 4 }
+        if normalized == "medium" { return 5 }
+        if normalized.contains("small") { return 6 }
+        return 7
     }
 
     private func date(_ value: [String: Any]?, _ key: String) -> Date? {

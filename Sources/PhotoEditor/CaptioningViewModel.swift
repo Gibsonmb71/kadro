@@ -9,6 +9,7 @@ final class CaptioningViewModel: ObservableObject {
     @Published var searchQuery = ""
     @Published var searchSelection = 0
     @Published var statusMessage = "Ready"
+    @Published private(set) var isRefreshingFlickrImages = false
 
     let rosterStore: RosterLibraryStore
     let persistence: SessionPersistenceService
@@ -263,6 +264,7 @@ final class CaptioningViewModel: ObservableObject {
             updated.photos[index].flickrTitle = info.title
             updated.photos[index].flickrLastUpdate = info.lastUpdate ?? updated.photos[index].flickrLastUpdate
             if let displayURL = info.displayURL {
+                updated.photos[index].fileURL = displayURL
                 updated.photos[index].flickrImageURL = displayURL
             }
 
@@ -370,6 +372,56 @@ final class CaptioningViewModel: ObservableObject {
 
     func syncPendingFlickrUpdates() {
         flickrSyncQueue?.syncPending(sessionID: session.id)
+    }
+
+    func refreshFlickrImages() {
+        guard !isRefreshingFlickrImages,
+              session.sourceType == .flickrAlbum,
+              let albumID = session.flickrAlbumID,
+              let flickrService else {
+            return
+        }
+
+        isRefreshingFlickrImages = true
+        statusMessage = "Refreshing Flickr images…"
+
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            defer { isRefreshingFlickrImages = false }
+
+            do {
+                try await flickrService.authenticate()
+                let records = try await flickrService.getAlbumPhotos(albumID: albumID)
+                let recordsByID = Dictionary(uniqueKeysWithValues: records.map { ($0.id, $0) })
+                var updated = session
+                var refreshedCount = 0
+
+                for index in updated.photos.indices {
+                    guard let photoID = updated.photos[index].flickrPhotoID,
+                          let record = recordsByID[photoID] else {
+                        continue
+                    }
+
+                    let changed = updated.photos[index].fileURL != record.displayURL
+                        || updated.photos[index].flickrThumbnailURL != record.thumbnailURL
+                    updated.photos[index].fileURL = record.displayURL
+                    updated.photos[index].flickrImageURL = record.displayURL
+                    updated.photos[index].flickrThumbnailURL = record.thumbnailURL
+                    updated.photos[index].flickrTitle = record.title
+                    updated.photos[index].flickrLastUpdate = record.lastUpdate ?? updated.photos[index].flickrLastUpdate
+                    if changed {
+                        refreshedCount += 1
+                    }
+                }
+
+                commit(updated)
+                statusMessage = refreshedCount == 0
+                    ? "Flickr image URLs are already current"
+                    : "Refreshed \(refreshedCount) Flickr image\(refreshedCount == 1 ? "" : "s")"
+            } catch {
+                statusMessage = "Could not refresh Flickr images · \(error.localizedDescription)"
+            }
+        }
     }
 
     func toggleFlag() {
