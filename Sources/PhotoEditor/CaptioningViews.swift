@@ -60,10 +60,11 @@ struct CaptioningView: View {
                 .frame(width: 1, height: 1)
                 .opacity(0)
         }
-        .task(id: viewModel.currentPhoto?.id) {
+        .task(id: viewModel.currentPhoto.map { "\($0.id.uuidString)|\($0.fileURL.absoluteString)" }) {
             guard let photo = viewModel.currentPhoto else { return }
             await viewModel.ensureFlickrMetadata(for: photo.id)
-            await imageLoader.load(url: photo.fileURL)
+            let imageURL = viewModel.currentPhoto?.fileURL ?? photo.fileURL
+            await imageLoader.load(url: imageURL, maxPixelSize: 2800)
             let nearbyURLs = [
                 viewModel.currentPhotoIndex - 1,
                 viewModel.currentPhotoIndex + 1
@@ -132,6 +133,20 @@ struct CaptioningView: View {
             }
             .buttonStyle(.bordered)
             .tint(viewModel.currentPhoto?.isFlagged == true ? .orange : nil)
+
+            if viewModel.session.sourceType == .flickrAlbum {
+                Button {
+                    viewModel.refreshFlickrImages()
+                } label: {
+                    Label(
+                        viewModel.isRefreshingFlickrImages ? "Refreshing…" : "Refresh Images",
+                        systemImage: "arrow.clockwise"
+                    )
+                }
+                .buttonStyle(.bordered)
+                .disabled(viewModel.isRefreshingFlickrImages)
+                .help("Fetch current Flickr image URLs without changing captions or review state")
+            }
 
             Button("Review") {
                 appState.showReview()

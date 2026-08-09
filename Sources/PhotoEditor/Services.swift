@@ -542,24 +542,25 @@ final class RosterLibraryStore: ObservableObject {
 final class PhotoLoadingService {
     static let shared = PhotoLoadingService()
 
-    private let cache: NSCache<NSURL, NSImage>
+    private let cache: NSCache<NSString, NSImage>
 
     init() {
-        let cache = NSCache<NSURL, NSImage>()
+        let cache = NSCache<NSString, NSImage>()
         cache.countLimit = 32
         cache.totalCostLimit = 256 * 1024 * 1024
         self.cache = cache
     }
 
     func loadImage(for url: URL, maxPixelSize: Int = 2400) async -> NSImage? {
-        if let cached = cache.object(forKey: url as NSURL) {
+        let cacheKey = "\(url.absoluteString)|\(maxPixelSize)" as NSString
+        if let cached = cache.object(forKey: cacheKey) {
             return cached
         }
 
         let data = await readDownsampledData(url: url, maxPixelSize: maxPixelSize)
         guard let data, let image = NSImage(data: data) else { return nil }
         let cost = max(image.size.width * image.size.height * 4, 1)
-        cache.setObject(image, forKey: url as NSURL, cost: Int(cost))
+        cache.setObject(image, forKey: cacheKey, cost: Int(cost))
         return image
     }
 
