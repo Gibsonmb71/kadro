@@ -821,10 +821,13 @@ final class FlickrAPIService: NSObject, ObservableObject, FlickrService {
         let displayURL = url(value, "url_h")
             ?? url(value, "url_k")
             ?? url(value, "url_l")
-            ?? url(value, "url_m")
             ?? url(value, "url_o")
-            ?? URL(string: "https://live.staticflickr.com/\(server)/\(id)_\(secret)_m.jpg")!
-        let thumbnailURL = url(value, "url_t") ?? url(value, "url_s") ?? displayURL
+            ?? url(value, "url_m")
+            ?? constructedImageURL(server: server, id: id, secret: secret, suffix: "m")!
+        let thumbnailURL = url(value, "url_t")
+            ?? url(value, "url_s")
+            ?? constructedImageURL(server: server, id: id, secret: secret, suffix: "t")
+            ?? displayURL
         return FlickrPhotoRecord(
             id: id,
             albumID: albumID,
@@ -863,14 +866,28 @@ final class FlickrAPIService: NSObject, ObservableObject, FlickrService {
         return URL(string: string)
     }
 
+    private func constructedImageURL(server: String, id: String, secret: String, suffix: String) -> URL? {
+        URL(string: "https://live.staticflickr.com/\(server)/\(id)_\(secret)_\(suffix).jpg")
+    }
+
     private func preferredDisplayURL(from values: [[String: Any]]?) -> URL? {
         values?
-            .sorted { urlRank(string($0, "label")) < urlRank(string($1, "label")) }
-            .compactMap { URL(string: string($0, "_content") ?? "") }
+            .compactMap { value -> (url: URL, rank: Int)? in
+                guard let label = string(value, "label"),
+                      let rank = urlRank(label),
+                      let url = URL(string: string(value, "_content") ?? ""),
+                      let host = url.host?.lowercased(),
+                      host == "staticflickr.com" || host.hasSuffix(".staticflickr.com") else {
+                    return nil
+                }
+                return (url, rank)
+            }
+            .sorted { $0.rank < $1.rank }
+            .map(\.url)
             .first
     }
 
-    private func urlRank(_ label: String?) -> Int {
+    private func urlRank(_ label: String?) -> Int? {
         let normalized = label?.lowercased() ?? ""
         if normalized.contains("large 1600") { return 0 }
         if normalized.contains("large 2048") { return 1 }
@@ -880,7 +897,7 @@ final class FlickrAPIService: NSObject, ObservableObject, FlickrService {
         if normalized == "medium" { return 5 }
         if normalized.contains("small") { return 6 }
         if normalized == "original" { return 7 }
-        return 8
+        return nil
     }
 
     private func date(_ value: [String: Any]?, _ key: String) -> Date? {

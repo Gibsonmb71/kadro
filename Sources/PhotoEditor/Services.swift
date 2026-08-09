@@ -564,6 +564,16 @@ final class PhotoLoadingService {
         return image
     }
 
+    func loadImage(for urls: [URL], maxPixelSize: Int = 2400) async -> NSImage? {
+        for url in urls {
+            if Task.isCancelled { return nil }
+            if let image = await loadImage(for: url, maxPixelSize: maxPixelSize) {
+                return image
+            }
+        }
+        return nil
+    }
+
     func preload(urls: [URL], maxPixelSize: Int = 720) {
         for url in urls {
             Task { _ = await loadImage(for: url, maxPixelSize: maxPixelSize) }
@@ -580,7 +590,11 @@ final class PhotoLoadingService {
             }
         }
 
-        guard let (data, _) = try? await URLSession.shared.data(from: url) else { return nil }
+        guard let (data, response) = try? await URLSession.shared.data(from: url),
+              let httpResponse = response as? HTTPURLResponse,
+              (200..<300).contains(httpResponse.statusCode) else {
+            return nil
+        }
         return Self.downsample(data: data, maxPixelSize: maxPixelSize)
     }
 
