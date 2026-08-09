@@ -31,6 +31,49 @@ struct KadroApp: App {
                 }
                 .keyboardShortcut("o", modifiers: [.command])
             }
+
+            SidebarCommands()
+            InspectorCommands()
+
+            CommandMenu("Photo") {
+                Button("Add/Search Player…") {
+                    appState.captioningModel?.openSearch()
+                }
+                .keyboardShortcut("/", modifiers: [])
+                .disabled(appState.screen != .captioning)
+
+                Button("Flag Photo") {
+                    appState.captioningModel?.toggleFlag()
+                }
+                .keyboardShortcut("f", modifiers: [])
+                .disabled(appState.screen != .captioning)
+
+                Button("Carry Previous Players") {
+                    appState.captioningModel?.carryPlayersFromPreviousPhoto()
+                }
+                .keyboardShortcut("c", modifiers: [])
+                .disabled(appState.screen != .captioning)
+
+                Divider()
+
+                Button("Save & Next") {
+                    appState.captioningModel?.finishCurrentPhotoAndAdvance()
+                }
+                .keyboardShortcut(.defaultAction)
+                .disabled(appState.screen != .captioning)
+
+                Button("Previous Photo") {
+                    appState.captioningModel?.navigatePrevious()
+                }
+                .keyboardShortcut(.leftArrow, modifiers: [])
+                .disabled(appState.screen != .captioning)
+
+                Button("Next Photo") {
+                    appState.captioningModel?.navigateNext()
+                }
+                .keyboardShortcut(.rightArrow, modifiers: [])
+                .disabled(appState.screen != .captioning)
+            }
         }
 
         Settings {
