@@ -36,7 +36,9 @@ final class CaptioningCommandController {
                 return true
             }
             if !hasCommand, !hasControl, !hasOption, keyCode == 51 {
-                viewModel.searchQuery.removeLast()
+                if !viewModel.searchQuery.isEmpty {
+                    viewModel.searchQuery.removeLast()
+                }
                 return true
             }
             if !hasCommand, !hasControl, !hasOption,
