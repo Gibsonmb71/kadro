@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDisplayName</key>
+	<string>Kadro</string>
+	<key>CFBundleExecutable</key>
+	<string>Kadro</string>
+	<key>CFBundleIdentifier</key>
+	<string>com.kadro.local</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>Kadro</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>1.0</string>
+	<key>CFBundleVersion</key>
+	<string>1</string>
+	<key>CFBundleIconName</key>
+	<string>AppIcon</string>
+	<key>CFBundleIconFile</key>
+	<string>AppIcon.icns</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>Flickr OAuth callback</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>kadro</string>
+				<string>photoeditor</string>
+			</array>
+		</dict>
+	</array>
+	<key>FlickrAPIKey</key>
+	<string></string>
+	<key>FlickrAPISecret</key>
+	<string></string>
+	<key>FlickrOAuthCallbackScheme</key>
+	<string>kadro</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>14.0</string>
+	<key>NSHighResolutionCapable</key>
+	<true/>
+</dict>
+</plist>

@@ -1,0 +1,53 @@
+{
+  "fill" : {
+    "automatic-gradient" : "gray:0.87000,1.00000"
+  },
+  "groups" : [
+    {
+      "layers" : [
+        {
+          "fill-specializations" : [
+            {
+              "value" : {
+                "automatic-gradient" : "display-p3:0.00000,0.00000,0.00000,1.00000"
+              }
+            },
+            {
+              "appearance" : "dark",
+              "value" : {
+                "automatic-gradient" : "display-p3:0.77148,0.77637,0.77637,1.00000"
+              }
+            },
+            {
+              "appearance" : "tinted",
+              "value" : "system-light"
+            }
+          ],
+          "image-name" : "Number-curves.svg",
+          "name" : "Number-curves",
+          "position" : {
+            "scale" : 0.5,
+            "translation-in-points" : [
+              0.20382299999994302,
+              0.00418000000001939
+            ]
+          }
+        }
+      ],
+      "shadow" : {
+        "kind" : "neutral",
+        "opacity" : 0.6
+      },
+      "translucency" : {
+        "enabled" : true,
+        "value" : 0.2
+      }
+    }
+  ],
+  "supported-platforms" : {
+    "circles" : [
+      "watchOS"
+    ],
+    "squares" : "shared"
+  }
+}
