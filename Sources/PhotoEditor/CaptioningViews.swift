@@ -36,125 +36,120 @@ struct CaptioningView: View {
     @EnvironmentObject private var appState: AppState
     @ObservedObject var viewModel: CaptioningViewModel
     @StateObject private var imageLoader = ImageLoaderViewModel()
+    @StateCompat private var inspectorPresented = true
 
     var body: some View {
         VStack(spacing: 0) {
-            topToolbar
-            Divider()
-
-            HStack(spacing: 0) {
-                photoPane
-                Divider()
-                PlayerSidebarView(viewModel: viewModel)
-                    .frame(width: 290)
+            photoPane
+            FilmstripView(viewModel: viewModel)
+            CaptionEntryControl(viewModel: viewModel)
+        }
+        .navigationTitle(viewModel.session.name)
+        .navigationSubtitle(viewModel.currentPhoto?.flickrTitle ?? viewModel.currentPhoto?.filename ?? "No photo")
+        .toolbarRole(.editor)
+        .toolbar {
+            ToolbarItem(placement: .navigation) {
+                Button {
+                    appState.closeSession()
+                } label: {
+                    Label("Sessions", systemImage: "chevron.left")
+                }
+                .help("Return to Sessions")
             }
 
-            Divider()
-            FilmstripView(viewModel: viewModel)
-            Divider()
-            keyboardBar
+            ToolbarItem(placement: .status) {
+                HStack(spacing: 10) {
+                    Text(viewModel.positionText)
+                        .font(.callout.monospacedDigit())
+                        .foregroundStyle(.secondary)
+
+                    if let syncState = viewModel.currentSyncState {
+                        Label(syncState.title, systemImage: syncState.symbolName)
+                            .font(.caption)
+                            .foregroundStyle(syncState == .failed || syncState == .conflict ? .orange : .secondary)
+                            .help("Flickr synchronization state")
+                    }
+                }
+            }
+
+            ToolbarItemGroup(placement: .primaryAction) {
+                Button {
+                    viewModel.toggleFlag()
+                } label: {
+                    Label(
+                        viewModel.currentPhoto?.isFlagged == true ? "Flagged" : "Flag",
+                        systemImage: viewModel.currentPhoto?.isFlagged == true ? "flag.fill" : "flag"
+                    )
+                }
+                .tint(viewModel.currentPhoto?.isFlagged == true ? .orange : nil)
+                .help("Flag this photo for review")
+
+                if viewModel.session.sourceType == .flickrAlbum {
+                    Button {
+                        viewModel.refreshFlickrImages()
+                    } label: {
+                        Label(
+                            viewModel.isRefreshingFlickrImages ? "Refreshing…" : "Refresh Images",
+                            systemImage: "arrow.clockwise"
+                        )
+                    }
+                    .disabled(viewModel.isRefreshingFlickrImages)
+                    .help("Fetch current Flickr image URLs without changing captions or review state")
+                }
+            }
+
+            if #available(macOS 26.0, *) {
+                ToolbarSpacer(.fixed)
+            }
+
+            ToolbarItem(placement: .primaryAction) {
+                Button("Review") {
+                    appState.showReview()
+                }
+                .help("Review this session")
+            }
         }
-        .background(Color(nsColor: .windowBackgroundColor))
+        .inspector(isPresented: $inspectorPresented) {
+            PlayerInspectorView(viewModel: viewModel)
+                .inspectorColumnWidth(min: 280, ideal: 320, max: 400)
+        }
         .overlay(alignment: .topLeading) {
             KeyboardEventCapture(viewModel: viewModel)
                 .frame(width: 1, height: 1)
                 .opacity(0)
         }
         .task(id: viewModel.currentPhoto.map { "\($0.id.uuidString)|\($0.fileURL.absoluteString)" }) {
+            await viewModel.refreshFlickrImagesIfNeeded()
             guard let photo = viewModel.currentPhoto else { return }
             await viewModel.ensureFlickrMetadata(for: photo.id)
             let imageURL = viewModel.currentPhoto?.fileURL ?? photo.fileURL
-            await imageLoader.load(url: imageURL, maxPixelSize: 2800)
-            let nearbyURLs = [
-                viewModel.currentPhotoIndex - 1,
-                viewModel.currentPhotoIndex + 1
-            ]
-            .filter { viewModel.session.photos.indices.contains($0) }
-            .map { viewModel.session.photos[$0].fileURL }
-            viewModel.imageService.preload(urls: nearbyURLs)
-        }
-        .sheet(isPresented: $viewModel.isSearchPresented) {
-            PlayerSearchView(viewModel: viewModel)
-        }
-    }
+            let isFlickrSession = viewModel.session.sourceType == .flickrAlbum
+            let previewPixelSize = isFlickrSession ? 1800 : 2800
 
-    private var topToolbar: some View {
-        HStack(spacing: 12) {
-            Button {
-                appState.closeSession()
-            } label: {
-                Label("Sessions", systemImage: "chevron.left")
-            }
-            .buttonStyle(.borderless)
-
-            Divider()
-                .frame(height: 18)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(viewModel.session.name)
-                    .font(.headline)
-                    .lineLimit(1)
-                Text(viewModel.currentPhoto?.flickrTitle ?? viewModel.currentPhoto?.filename ?? "No photo")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            }
-
-            Spacer()
-
-            Text(viewModel.positionText)
-                .font(.callout.monospacedDigit())
-                .foregroundStyle(.secondary)
-
-            if let syncState = viewModel.currentSyncState {
-                Label(syncState.title, systemImage: syncState.symbolName)
-                    .font(.caption)
-                    .foregroundStyle(syncState == .failed || syncState == .conflict ? .orange : .secondary)
-                    .help("Flickr synchronization state")
-            }
-
-            if let syncError = viewModel.currentPhoto?.flickrSyncError,
-               !syncError.isEmpty {
-                Text(syncError)
-                    .font(.caption2)
-                    .foregroundStyle(.orange)
-                    .lineLimit(1)
-                    .frame(maxWidth: 230, alignment: .leading)
-                    .help(syncError)
-            }
-
-            Button {
-                viewModel.toggleFlag()
-            } label: {
-                Label(
-                    viewModel.currentPhoto?.isFlagged == true ? "Flagged" : "Flag",
-                    systemImage: viewModel.currentPhoto?.isFlagged == true ? "flag.fill" : "flag"
-                )
-            }
-            .buttonStyle(.bordered)
-            .tint(viewModel.currentPhoto?.isFlagged == true ? .orange : nil)
-
-            if viewModel.session.sourceType == .flickrAlbum {
-                Button {
-                    viewModel.refreshFlickrImages()
-                } label: {
-                    Label(
-                        viewModel.isRefreshingFlickrImages ? "Refreshing…" : "Refresh Images",
-                        systemImage: "arrow.clockwise"
+            if isFlickrSession {
+                let nextIndex = viewModel.currentPhotoIndex + 1
+                if viewModel.session.photos.indices.contains(nextIndex) {
+                    // Match the main-preview cache key so advancing does not
+                    // trigger a second network fetch and downsample operation.
+                    viewModel.imageService.preload(
+                        urls: [viewModel.session.photos[nextIndex].fileURL],
+                        maxPixelSize: previewPixelSize
                     )
                 }
-                .buttonStyle(.bordered)
-                .disabled(viewModel.isRefreshingFlickrImages)
-                .help("Fetch current Flickr image URLs without changing captions or review state")
             }
 
-            Button("Review") {
-                appState.showReview()
+            await imageLoader.load(url: imageURL, maxPixelSize: previewPixelSize)
+
+            if !isFlickrSession {
+                let nearbyURLs = [
+                    viewModel.currentPhotoIndex - 1,
+                    viewModel.currentPhotoIndex + 1
+                ]
+                .filter { viewModel.session.photos.indices.contains($0) }
+                .map { viewModel.session.photos[$0].fileURL }
+                viewModel.imageService.preload(urls: nearbyURLs)
             }
-            .buttonStyle(.bordered)
         }
-        .padding(.horizontal, 16)
-        .frame(height: 48)
     }
 
     private var photoPane: some View {
@@ -190,59 +185,6 @@ struct CaptioningView: View {
         .clipped()
     }
 
-    private var keyboardBar: some View {
-        HStack(spacing: 18) {
-            VStack(alignment: .leading, spacing: 3) {
-                Text(viewModel.activeTeamName.uppercased())
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
-                Text(viewModel.nextRosterName.map { "Tab: \($0)" } ?? "Single roster")
-                    .font(.caption)
-                    .foregroundStyle(.tertiary)
-            }
-            .frame(minWidth: 150, alignment: .leading)
-
-            HStack(spacing: 0) {
-                Text("#")
-                    .font(.title2.weight(.semibold))
-                    .foregroundStyle(.secondary)
-                TextField(
-                    "—",
-                    text: Binding(
-                        get: { viewModel.jerseyBuffer },
-                        set: { value in
-                            viewModel.jerseyBuffer = String(value.filter(\.isNumber).prefix(3))
-                        }
-                    )
-                )
-                .textFieldStyle(.plain)
-                .font(.title2.monospacedDigit().weight(.semibold))
-                .multilineTextAlignment(.center)
-                .frame(width: 92)
-                .accessibilityLabel("Current jersey number")
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 7)
-            .background(Color(nsColor: .textBackgroundColor))
-            .overlay(Rectangle().stroke(Color(nsColor: .separatorColor), lineWidth: 1))
-
-            HStack(spacing: 15) {
-                KeyHint(key: "Space", label: "Add Player")
-                KeyHint(key: "Enter", label: "Save & Next")
-            }
-
-            Spacer(minLength: 8)
-
-            Text(viewModel.statusMessage)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-                .frame(maxWidth: 240, alignment: .trailing)
-        }
-        .padding(.horizontal, 18)
-        .padding(.vertical, 11)
-        .background(.regularMaterial)
-    }
 }
 
 struct FilmstripView: View {
@@ -256,27 +198,39 @@ struct FilmstripView: View {
     }
 
     var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            LazyHStack(spacing: 8) {
-                ForEach(visibleIndices, id: \.self) { index in
-                    let photo = viewModel.session.photos[index]
-                    Button {
-                        viewModel.navigate(to: index)
-                    } label: {
-                        FilmstripThumbnail(
-                            photo: photo,
-                            isCurrent: index == viewModel.currentPhotoIndex
-                        )
+        ScrollViewReader { proxy in
+            ScrollView(.horizontal, showsIndicators: false) {
+                LazyHStack(spacing: 8) {
+                    ForEach(visibleIndices, id: \.self) { index in
+                        let photo = viewModel.session.photos[index]
+                        Button {
+                            viewModel.navigate(to: index)
+                        } label: {
+                            FilmstripThumbnail(
+                                photo: photo,
+                                isCurrent: index == viewModel.currentPhotoIndex
+                            )
+                        }
+                        .buttonStyle(.plain)
+                        .help(photo.filename)
+                        .accessibilityLabel("Photo \(index + 1), \(photo.filename)")
+                        .accessibilityAddTraits(index == viewModel.currentPhotoIndex ? .isSelected : [])
+                        .id(index)
                     }
-                    .buttonStyle(.plain)
-                    .help(photo.filename)
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 9)
+            }
+            .onChange(of: viewModel.currentPhotoIndex) { _, newIndex in
+                withAnimation(.easeOut(duration: 0.12)) {
+                    proxy.scrollTo(newIndex, anchor: .center)
                 }
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 9)
+            .onAppear {
+                proxy.scrollTo(viewModel.currentPhotoIndex, anchor: .center)
+            }
         }
         .frame(height: 78)
-        .background(.bar)
     }
 }
 
@@ -330,14 +284,19 @@ struct KeyHint: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
+        .fixedSize(horizontal: true, vertical: false)
     }
 }
 
-struct PlayerSidebarView: View {
+struct PlayerInspectorView: View {
     @ObservedObject var viewModel: CaptioningViewModel
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
+            if viewModel.isSearchPresented {
+                PlayerSearchResultsView(viewModel: viewModel)
+            }
+
             HStack(alignment: .firstTextBaseline) {
                 Text("People in this photo")
                     .font(.headline)
@@ -355,17 +314,12 @@ struct PlayerSidebarView: View {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 0) {
                     if viewModel.resolvedCurrentAssignments.isEmpty {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("No players added")
-                                .font(.callout)
-                                .foregroundStyle(.secondary)
-                            Text("Type a jersey number, then press Space.")
-                                .font(.caption)
-                                .foregroundStyle(.tertiary)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(16)
+                        ContentUnavailableView(
+                            "No Players",
+                            systemImage: "person",
+                            description: Text("Type a jersey number, then press Space.")
+                        )
+                        .frame(minHeight: 115)
                     } else {
                         ForEach(viewModel.resolvedCurrentAssignments) { assignment in
                             HStack(spacing: 10) {
@@ -441,7 +395,67 @@ struct PlayerSidebarView: View {
                 FlickrPhotoDetailsView(viewModel: viewModel)
             }
         }
-        .background(Color(nsColor: .controlBackgroundColor))
+        .searchable(
+            text: $viewModel.searchQuery,
+            isPresented: $viewModel.isSearchPresented,
+            placement: .toolbar,
+            prompt: "Search players"
+        )
+        .onSubmit(of: .search) {
+            viewModel.selectSearchResult()
+        }
+    }
+}
+
+private struct PlayerSearchResultsView: View {
+    @ObservedObject var viewModel: CaptioningViewModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Search Results")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 16)
+                .padding(.top, 12)
+
+            if viewModel.searchResults.isEmpty {
+                ContentUnavailableView(
+                    "No Matching Players",
+                    systemImage: "person.crop.circle.badge.questionmark",
+                    description: Text("Try a different name or jersey number.")
+                )
+                .frame(minHeight: 115)
+            } else {
+                List(Array(viewModel.searchResults.enumerated()), id: \.element.id) { index, player in
+                    Button {
+                        viewModel.searchSelection = index
+                        viewModel.selectSearchResult()
+                    } label: {
+                        HStack(spacing: 9) {
+                            Text("#\(player.jerseyNumber)")
+                                .font(.callout.monospaced().weight(.semibold))
+                                .frame(width: 42, alignment: .leading)
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(player.name)
+                                    .foregroundStyle(.primary)
+                                    .lineLimit(1)
+                                Text(player.teamName)
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                            }
+                            Spacer(minLength: 0)
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .listRowBackground(index == viewModel.searchSelection ? Color.accentColor.opacity(0.16) : nil)
+                }
+                .listStyle(.inset)
+                .frame(maxHeight: 210)
+            }
+        }
+        .padding(.bottom, 8)
     }
 }
 
@@ -737,7 +751,6 @@ struct LegacyReviewView: View {
                 .listStyle(.inset)
             }
         }
-        .background(Color(nsColor: .windowBackgroundColor))
     }
 
     private var reviewCounts: some View {

@@ -43,16 +43,56 @@ struct ReviewView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            reviewHeader
-            Divider()
-
             HStack(spacing: 0) {
                 reviewSidebar
                 Divider()
                 resultsPane
             }
         }
-        .background(Color(nsColor: .windowBackgroundColor))
+        .navigationTitle("Review")
+        .navigationSubtitle(sessionSourceDescription)
+        .toolbarRole(.editor)
+        .toolbar {
+            ToolbarItem(placement: .navigation) {
+                Button {
+                    appState.returnToCaptioning()
+                } label: {
+                    Label("Captioning", systemImage: "chevron.left")
+                }
+                .help("Return to captioning")
+            }
+
+            ToolbarItem(placement: .status) {
+                HStack(spacing: 8) {
+                    Text("\(viewModel.session.reviewedCount) / \(viewModel.session.photos.count)")
+                        .font(.callout.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                    ProgressView(value: reviewProgress, total: 1)
+                        .frame(width: 110)
+                        .controlSize(.small)
+                }
+                .help("Photos reviewed")
+            }
+
+            if viewModel.session.sourceType == .flickrAlbum {
+                ToolbarItemGroup(placement: .primaryAction) {
+                    if pendingSyncCount > 0 {
+                        Button("Sync Pending") {
+                            viewModel.syncPendingFlickrUpdates()
+                        }
+                    }
+                    if failedSyncCount > 0 {
+                        Button("Retry Failed") {
+                            viewModel.retryFlickrSync()
+                        }
+                    }
+                }
+
+                if #available(macOS 26.0, *) {
+                    ToolbarSpacer(.fixed)
+                }
+            }
+        }
         .onAppear {
             normalizeFilter()
         }
@@ -77,42 +117,6 @@ struct ReviewView: View {
                 $0.flickrSyncState == .failed || $0.flickrSyncState == .conflict
             }
         }
-    }
-
-    private var reviewHeader: some View {
-        HStack(spacing: 12) {
-            Button {
-                appState.returnToCaptioning()
-            } label: {
-                Label("Captioning", systemImage: "chevron.left")
-            }
-            .buttonStyle(.borderless)
-
-            Divider()
-                .frame(height: 20)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Review")
-                    .font(.headline)
-                Text(sessionSourceDescription)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            }
-
-            Spacer()
-
-            VStack(alignment: .trailing, spacing: 4) {
-                Text("\(viewModel.session.reviewedCount) of \(viewModel.session.photos.count) reviewed")
-                    .font(.callout.monospacedDigit())
-                    .foregroundStyle(.secondary)
-                ProgressView(value: reviewProgress, total: 1)
-                    .frame(width: 145)
-                    .controlSize(.small)
-            }
-        }
-        .padding(.horizontal, 18)
-        .frame(height: 58)
     }
 
     private var reviewSidebar: some View {
@@ -202,7 +206,6 @@ struct ReviewView: View {
         .padding(.vertical, 16)
         .frame(width: 220, alignment: .top)
         .frame(maxHeight: .infinity, alignment: .top)
-        .background(Color(nsColor: .controlBackgroundColor).opacity(0.35))
     }
 
     private var resultsPane: some View {
@@ -269,19 +272,15 @@ struct ReviewView: View {
     }
 
     private var emptyState: some View {
-        VStack(spacing: 10) {
-            Image(systemName: filter == .notReviewed ? "checkmark.circle" : "photo.on.rectangle")
-                .font(.system(size: 30))
-                .foregroundStyle(.secondary)
-            Text(filter == .notReviewed ? "Review queue is clear" : "No matching photos")
-                .font(.headline)
-            Text(filter == .notReviewed
-                ? "All photos in this session have been reviewed."
-                : "Choose another queue from the sidebar.")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        ContentUnavailableView(
+            filter == .notReviewed ? "Review Queue Is Clear" : "No Matching Photos",
+            systemImage: filter == .notReviewed ? "checkmark.circle" : "photo.on.rectangle",
+            description: Text(
+                filter == .notReviewed
+                    ? "All photos in this session have been reviewed."
+                    : "Choose another queue from the sidebar."
+            )
+        )
     }
 
     private var sessionSourceDescription: String {

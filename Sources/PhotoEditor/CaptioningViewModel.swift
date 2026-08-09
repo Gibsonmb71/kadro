@@ -17,6 +17,7 @@ final class CaptioningViewModel: ObservableObject {
     let flickrService: (any FlickrService)?
     let flickrSyncQueue: FlickrSyncQueue?
     let undoManager = UndoManager()
+    private var hasAutomaticallyRefreshedFlickrImages = false
 
     init(
         session: PhotoSession,
@@ -375,6 +376,21 @@ final class CaptioningViewModel: ObservableObject {
     }
 
     func refreshFlickrImages() {
+        Task { @MainActor [weak self] in
+            await self?.performFlickrImageRefresh()
+        }
+    }
+
+    func refreshFlickrImagesIfNeeded() async {
+        guard session.sourceType == .flickrAlbum,
+              !hasAutomaticallyRefreshedFlickrImages else {
+            return
+        }
+        hasAutomaticallyRefreshedFlickrImages = true
+        await performFlickrImageRefresh()
+    }
+
+    private func performFlickrImageRefresh() async {
         guard !isRefreshingFlickrImages,
               session.sourceType == .flickrAlbum,
               let albumID = session.flickrAlbumID,
@@ -384,43 +400,39 @@ final class CaptioningViewModel: ObservableObject {
 
         isRefreshingFlickrImages = true
         statusMessage = "Refreshing Flickr images…"
+        defer { isRefreshingFlickrImages = false }
 
-        Task { @MainActor [weak self] in
-            guard let self else { return }
-            defer { isRefreshingFlickrImages = false }
+        do {
+            try await flickrService.authenticate()
+            let records = try await flickrService.getAlbumPhotos(albumID: albumID)
+            let recordsByID = Dictionary(uniqueKeysWithValues: records.map { ($0.id, $0) })
+            var updated = session
+            var refreshedCount = 0
 
-            do {
-                try await flickrService.authenticate()
-                let records = try await flickrService.getAlbumPhotos(albumID: albumID)
-                let recordsByID = Dictionary(uniqueKeysWithValues: records.map { ($0.id, $0) })
-                var updated = session
-                var refreshedCount = 0
-
-                for index in updated.photos.indices {
-                    guard let photoID = updated.photos[index].flickrPhotoID,
-                          let record = recordsByID[photoID] else {
-                        continue
-                    }
-
-                    let changed = updated.photos[index].fileURL != record.displayURL
-                        || updated.photos[index].flickrThumbnailURL != record.thumbnailURL
-                    updated.photos[index].fileURL = record.displayURL
-                    updated.photos[index].flickrImageURL = record.displayURL
-                    updated.photos[index].flickrThumbnailURL = record.thumbnailURL
-                    updated.photos[index].flickrTitle = record.title
-                    updated.photos[index].flickrLastUpdate = record.lastUpdate ?? updated.photos[index].flickrLastUpdate
-                    if changed {
-                        refreshedCount += 1
-                    }
+            for index in updated.photos.indices {
+                guard let photoID = updated.photos[index].flickrPhotoID,
+                      let record = recordsByID[photoID] else {
+                    continue
                 }
 
-                commit(updated)
-                statusMessage = refreshedCount == 0
-                    ? "Flickr image URLs are already current"
-                    : "Refreshed \(refreshedCount) Flickr image\(refreshedCount == 1 ? "" : "s")"
-            } catch {
-                statusMessage = "Could not refresh Flickr images · \(error.localizedDescription)"
+                let changed = updated.photos[index].fileURL != record.displayURL
+                    || updated.photos[index].flickrThumbnailURL != record.thumbnailURL
+                updated.photos[index].fileURL = record.displayURL
+                updated.photos[index].flickrImageURL = record.displayURL
+                updated.photos[index].flickrThumbnailURL = record.thumbnailURL
+                updated.photos[index].flickrTitle = record.title
+                updated.photos[index].flickrLastUpdate = record.lastUpdate ?? updated.photos[index].flickrLastUpdate
+                if changed {
+                    refreshedCount += 1
+                }
             }
+
+            commit(updated)
+            statusMessage = refreshedCount == 0
+                ? "Flickr image URLs are already current"
+                : "Refreshed \(refreshedCount) Flickr image\(refreshedCount == 1 ? "" : "s")"
+        } catch {
+            statusMessage = "Could not refresh Flickr images · \(error.localizedDescription)"
         }
     }
 
@@ -480,6 +492,21 @@ final class CaptioningViewModel: ObservableObject {
         searchQuery = initialQuery
         searchSelection = 0
         isSearchPresented = true
+
+        // The sheet and its focused TextField mount after this key event has
+        // finished. On macOS, that presentation cycle can briefly write an
+        // empty value back through the binding. Restore the opening letter
+        // on the next run loop only when nothing newer has been typed.
+        guard !initialQuery.isEmpty else { return }
+        Task { @MainActor [weak self] in
+            await Task.yield()
+            guard let self,
+                  self.isSearchPresented,
+                  self.searchQuery.isEmpty else {
+                return
+            }
+            self.searchQuery = initialQuery
+        }
     }
 
     func dismissSearch() {

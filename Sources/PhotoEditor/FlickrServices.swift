@@ -818,11 +818,11 @@ final class FlickrAPIService: NSObject, ObservableObject, FlickrService {
             return nil
         }
 
-        let displayURL = url(value, "url_o")
+        let displayURL = url(value, "url_h")
             ?? url(value, "url_k")
-            ?? url(value, "url_h")
             ?? url(value, "url_l")
             ?? url(value, "url_m")
+            ?? url(value, "url_o")
             ?? URL(string: "https://live.staticflickr.com/\(server)/\(id)_\(secret)_m.jpg")!
         let thumbnailURL = url(value, "url_t") ?? url(value, "url_s") ?? displayURL
         return FlickrPhotoRecord(
@@ -872,14 +872,15 @@ final class FlickrAPIService: NSObject, ObservableObject, FlickrService {
 
     private func urlRank(_ label: String?) -> Int {
         let normalized = label?.lowercased() ?? ""
-        if normalized == "original" { return 0 }
+        if normalized.contains("large 1600") { return 0 }
         if normalized.contains("large 2048") { return 1 }
-        if normalized == "large" || normalized.contains("large 1600") { return 2 }
+        if normalized == "large" { return 2 }
         if normalized.contains("medium 800") { return 3 }
         if normalized.contains("medium 640") { return 4 }
         if normalized == "medium" { return 5 }
         if normalized.contains("small") { return 6 }
-        return 7
+        if normalized == "original" { return 7 }
+        return 8
     }
 
     private func date(_ value: [String: Any]?, _ key: String) -> Date? {

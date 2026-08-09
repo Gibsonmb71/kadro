@@ -5,107 +5,111 @@ struct StartView: View {
     @EnvironmentObject private var appState: AppState
 
     var body: some View {
-        NavigationStack {
-            List {
-                Section("Recent Sessions") {
-                    if appState.recentSessions.isEmpty {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("No sessions yet")
-                                .font(.headline)
-                            Text("Choose a photo folder and roster to begin captioning.")
-                                .foregroundStyle(.secondary)
-                            Button("New Photo Session") {
-                                appState.startNewSession()
-                            }
-                            .buttonStyle(.borderedProminent)
-                            .keyboardShortcut(.defaultAction)
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.vertical, 22)
-                    } else {
-                        ForEach(appState.recentSessions) { session in
-                            Button {
-                                appState.openRecentSession(session)
-                            } label: {
-                                HStack(spacing: 12) {
-                                    Image(systemName: "photo.on.rectangle")
-                                        .foregroundStyle(.secondary)
-                                        .frame(width: 24)
-
-                                    VStack(alignment: .leading, spacing: 3) {
-                                        Text(session.name)
-                                            .font(.headline)
-                                            .foregroundStyle(.primary)
-                                        Text(session.folderName)
-                                            .font(.subheadline)
-                                            .foregroundStyle(.secondary)
-                                    }
-
-                                    Spacer()
-
-                                    VStack(alignment: .trailing, spacing: 3) {
-                                        Text("\(session.reviewedPhotoCount) / \(session.totalPhotoCount) reviewed")
-                                            .font(.callout.monospacedDigit())
-                                            .foregroundStyle(.secondary)
-                                        if session.captionedPhotoCount > session.reviewedPhotoCount {
-                                            Text("\(session.captionedPhotoCount) captioned")
-                                                .font(.caption.monospacedDigit())
-                                                .foregroundStyle(.secondary)
-                                        }
-                                        HStack(spacing: 8) {
-                                            if session.flaggedPhotoCount > 0 {
-                                                Text("\(session.flaggedPhotoCount) flagged")
-                                                    .foregroundStyle(.orange)
-                                            }
-                                            Text(session.lastOpenedAt, style: .relative)
-                                                .foregroundStyle(.tertiary)
-                                        }
-                                        .font(.caption)
-                                    }
-                                }
-                                .padding(.vertical, 4)
-                                .contentShape(Rectangle())
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
-                }
+        Group {
+            if appState.recentSessions.isEmpty {
+                emptyState
+            } else {
+                sessionList
             }
-            .listStyle(.inset)
-            .navigationTitle("Sessions")
-            .toolbar {
-                ToolbarItem(placement: .primaryAction) {
-                    Button("New Photo Session") {
-                        appState.startNewSession()
-                    }
-                    .keyboardShortcut(.defaultAction)
+        }
+        .navigationTitle("Sessions")
+        .toolbar {
+            ToolbarItemGroup(placement: .primaryAction) {
+                Button {
+                    appState.startNewSession()
+                } label: {
+                    Label("New Photo Session", systemImage: "plus")
                 }
+                .keyboardShortcut(.defaultAction)
 
-                ToolbarItem {
+                Button {
+                    appState.openSessionFile()
+                } label: {
+                    Label("Open Session File…", systemImage: "folder")
+                }
+                .help("Open Session File…")
+
+                SettingsLink {
+                    Label("Settings…", systemImage: "gearshape")
+                }
+                .help("Settings…")
+            }
+        }
+    }
+
+    private var emptyState: some View {
+        ContentUnavailableView {
+            Label("No Sessions Yet", systemImage: "photo.on.rectangle.angled")
+        } description: {
+            Text("Create a session from a Lightroom export folder or open a saved session file.")
+        } actions: {
+            Button("New Photo Session") {
+                appState.startNewSession()
+            }
+            .buttonStyle(.borderedProminent)
+        }
+    }
+
+    private var sessionList: some View {
+        List {
+            Section("Recent Sessions") {
+                ForEach(appState.recentSessions) { session in
                     Button {
-                        appState.openSessionFile()
+                        appState.openRecentSession(session)
                     } label: {
-                        Label("Open Session File…", systemImage: "folder")
+                        sessionRow(session)
                     }
-                    .help("Open Session File…")
-                }
-
-                ToolbarItem {
-                    Button {
-                        appState.showRosters()
-                    } label: {
-                        Label("Manage Rosters", systemImage: "person.3")
+                    .buttonStyle(.plain)
+                    .contextMenu {
+                        Button("Open") {
+                            appState.openRecentSession(session)
+                        }
                     }
-                }
-
-                ToolbarItem {
-                    SettingsLink {
-                        Label("Settings…", systemImage: "gearshape")
-                    }
-                    .help("Settings…")
                 }
             }
         }
+        .listStyle(.inset)
+    }
+
+    private func sessionRow(_ session: RecentSessionSummary) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: "photo.on.rectangle")
+                .foregroundStyle(.secondary)
+                .frame(width: 24)
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(session.name)
+                    .font(.headline)
+                    .foregroundStyle(.primary)
+                Text(session.folderName)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+
+            VStack(alignment: .trailing, spacing: 3) {
+                Text("\(session.reviewedPhotoCount) / \(session.totalPhotoCount) reviewed")
+                    .font(.callout.monospacedDigit())
+                    .foregroundStyle(.secondary)
+                if session.captionedPhotoCount > session.reviewedPhotoCount {
+                    Text("\(session.captionedPhotoCount) captioned")
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                }
+                HStack(spacing: 8) {
+                    if session.flaggedPhotoCount > 0 {
+                        Text("\(session.flaggedPhotoCount) flagged")
+                            .foregroundStyle(.orange)
+                    }
+                    Text(session.lastOpenedAt, style: .relative)
+                        .foregroundStyle(.tertiary)
+                }
+                .font(.caption)
+            }
+        }
+        .padding(.vertical, 4)
+        .contentShape(Rectangle())
     }
 }
 
@@ -288,6 +292,9 @@ struct SessionSetupView: View {
                 }
             }
             .formStyle(.grouped)
+            .scrollContentBackground(.hidden)
+            .padding(.horizontal, 16)
+            .padding(.bottom, 16)
             .frame(maxWidth: 820)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .navigationTitle("New Photo Session")
@@ -875,8 +882,9 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: 520, height: 480)
-        .padding()
+        .scrollContentBackground(.hidden)
+        .padding(16)
+        .frame(minWidth: 560, minHeight: 480)
         .onAppear {
             flickrAPIKey = appState.flickrService.configuredAPIKey
         }

@@ -245,8 +245,8 @@ struct RootView: View {
     var body: some View {
         Group {
             switch appState.screen {
-            case .start:
-                StartView()
+            case .start, .rosters:
+                AppNavigationView()
             case .setup:
                 SessionSetupView()
             case .captioning:
@@ -261,8 +261,6 @@ struct RootView: View {
                 } else {
                     StartView()
                 }
-            case .rosters:
-                RosterManagementView()
             }
         }
         .frame(minWidth: 980, minHeight: 680)
