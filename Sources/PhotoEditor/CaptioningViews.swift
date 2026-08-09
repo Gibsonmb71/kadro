@@ -12,10 +12,19 @@ final class ImageLoaderViewModel: ObservableObject {
         task?.cancel()
     }
 
-    func load(url: URL?, maxPixelSize: Int = 2400) async {
+    func load(
+        url: URL?,
+        fallbackURLs: [URL] = [],
+        maxPixelSize: Int = 2400
+    ) async {
+        var urls = [URL]()
+        for candidate in ([url] + fallbackURLs).compactMap({ $0 }) where !urls.contains(candidate) {
+            urls.append(candidate)
+        }
+
         task?.cancel()
         image = nil
-        guard let url else {
+        guard !urls.isEmpty else {
             isLoading = false
             return
         }
@@ -23,7 +32,7 @@ final class ImageLoaderViewModel: ObservableObject {
         isLoading = true
         let service = service
         task = Task { @MainActor [weak self] in
-            let image = await service.loadImage(for: url, maxPixelSize: maxPixelSize)
+            let image = await service.loadImage(for: urls, maxPixelSize: maxPixelSize)
             guard !Task.isCancelled else { return }
             self?.image = image
             self?.isLoading = false
@@ -138,7 +147,13 @@ struct CaptioningView: View {
                 }
             }
 
-            await imageLoader.load(url: imageURL, maxPixelSize: previewPixelSize)
+            let loadedPhoto = viewModel.currentPhoto ?? photo
+            let fallbackURLs = loadedPhoto.flickrThumbnailURL.map { [$0] } ?? []
+            await imageLoader.load(
+                url: imageURL,
+                fallbackURLs: fallbackURLs,
+                maxPixelSize: previewPixelSize
+            )
 
             if !isFlickrSession {
                 let nearbyURLs = [
@@ -266,7 +281,8 @@ struct FilmstripThumbnail: View {
         .clipped()
         .overlay(Rectangle().stroke(isCurrent ? Color.accentColor : Color.clear, lineWidth: 2))
         .task(id: photo.id) {
-            await imageLoader.load(url: photo.fileURL, maxPixelSize: 320)
+            let fallbackURLs = photo.flickrThumbnailURL.map { [$0] } ?? []
+            await imageLoader.load(url: photo.fileURL, fallbackURLs: fallbackURLs, maxPixelSize: 320)
         }
     }
 }
@@ -856,7 +872,8 @@ struct LegacyReviewPhotoRow: View {
         }
         .padding(.vertical, 5)
         .task(id: photo.id) {
-            await imageLoader.load(url: photo.fileURL)
+            let fallbackURLs = photo.flickrThumbnailURL.map { [$0] } ?? []
+            await imageLoader.load(url: photo.fileURL, fallbackURLs: fallbackURLs)
         }
     }
 }
