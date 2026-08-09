@@ -120,6 +120,11 @@ enum KadroSelfTest {
             send(53, "")
             require(!viewModel.isSearchPresented, "Escape dismisses player search")
 
+            send(0, "/")
+            send(51, "")
+            require(viewModel.isSearchPresented && viewModel.searchQuery.isEmpty, "backspace on empty player search is safe")
+            send(53, "")
+
             viewModel.carryPlayersFromPreviousPhoto()
             require(viewModel.currentAssignments.count == 2, "carry previous players")
             viewModel.carryPlayersFromPreviousPhoto()
