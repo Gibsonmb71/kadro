@@ -6,11 +6,7 @@ final class ImageLoaderViewModel: ObservableObject {
     @Published var image: NSImage?
     @Published var isLoading = false
     private let service = PhotoLoadingService.shared
-    private var task: Task<Void, Never>?
-
-    deinit {
-        task?.cancel()
-    }
+    private var loadGeneration = 0
 
     func load(
         url: URL?,
@@ -22,7 +18,8 @@ final class ImageLoaderViewModel: ObservableObject {
             urls.append(candidate)
         }
 
-        task?.cancel()
+        loadGeneration += 1
+        let generation = loadGeneration
         image = nil
         guard !urls.isEmpty else {
             isLoading = false
@@ -30,14 +27,14 @@ final class ImageLoaderViewModel: ObservableObject {
         }
 
         isLoading = true
-        let service = service
-        task = Task { @MainActor [weak self] in
-            let image = await service.loadImage(for: urls, maxPixelSize: maxPixelSize)
-            guard !Task.isCancelled else { return }
-            self?.image = image
-            self?.isLoading = false
+        let loadedImage = await service.loadImage(for: urls, maxPixelSize: maxPixelSize)
+        guard generation == loadGeneration else { return }
+        guard !Task.isCancelled else {
+            isLoading = false
+            return
         }
-        await task?.value
+        image = loadedImage
+        isLoading = false
     }
 }
 
@@ -127,10 +124,12 @@ struct CaptioningView: View {
                 .frame(width: 1, height: 1)
                 .opacity(0)
         }
-        .task(id: viewModel.currentPhoto.map { "\($0.id.uuidString)|\($0.fileURL.absoluteString)" }) {
+        .task(id: viewModel.currentPhoto?.id) {
             await viewModel.refreshFlickrImagesIfNeeded()
+            guard !Task.isCancelled else { return }
             guard let photo = viewModel.currentPhoto else { return }
             await viewModel.ensureFlickrMetadata(for: photo.id)
+            guard !Task.isCancelled else { return }
             let imageURL = viewModel.currentPhoto?.fileURL ?? photo.fileURL
             let isFlickrSession = viewModel.session.sourceType == .flickrAlbum
             let previewPixelSize = isFlickrSession ? 1800 : 2800
@@ -148,7 +147,7 @@ struct CaptioningView: View {
             }
 
             let loadedPhoto = viewModel.currentPhoto ?? photo
-            let fallbackURLs = loadedPhoto.flickrThumbnailURL.map { [$0] } ?? []
+            let fallbackURLs = [loadedPhoto.flickrImageURL, loadedPhoto.flickrThumbnailURL].compactMap { $0 }
             await imageLoader.load(
                 url: imageURL,
                 fallbackURLs: fallbackURLs,
@@ -281,7 +280,7 @@ struct FilmstripThumbnail: View {
         .clipped()
         .overlay(Rectangle().stroke(isCurrent ? Color.accentColor : Color.clear, lineWidth: 2))
         .task(id: photo.id) {
-            let fallbackURLs = photo.flickrThumbnailURL.map { [$0] } ?? []
+            let fallbackURLs = [photo.flickrImageURL, photo.flickrThumbnailURL].compactMap { $0 }
             await imageLoader.load(url: photo.fileURL, fallbackURLs: fallbackURLs, maxPixelSize: 320)
         }
     }

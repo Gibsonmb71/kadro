@@ -595,6 +595,10 @@ final class PhotoLoadingService {
               (200..<300).contains(httpResponse.statusCode) else {
             return nil
         }
+        if let mimeType = httpResponse.mimeType,
+           !mimeType.lowercased().hasPrefix("image/") {
+            return nil
+        }
         return Self.downsample(data: data, maxPixelSize: maxPixelSize)
     }
 
