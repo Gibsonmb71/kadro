@@ -485,7 +485,7 @@ struct ReviewPhotoRow: View {
         }
         .padding(.vertical, 7)
         .task(id: photo.id) {
-            let fallbackURLs = photo.flickrThumbnailURL.map { [$0] } ?? []
+            let fallbackURLs = [photo.flickrImageURL, photo.flickrThumbnailURL].compactMap { $0 }
             await imageLoader.load(url: photo.fileURL, fallbackURLs: fallbackURLs, maxPixelSize: 360)
         }
     }
